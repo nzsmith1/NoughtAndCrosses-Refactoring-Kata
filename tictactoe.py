@@ -1,101 +1,120 @@
 #!/usr/bin/env python3
-import sys
+from enum import Enum
+from typing import List, Optional
+from copy import deepcopy
+class Player(str, Enum):
+    X = "X",
+    O = "O"
+
+
+class Diag(Enum):
+    TOP_LEFT_TO_BOT_RIGHT = 0,
+    TOP_RIGHT_TO_BOT_LEFT = 1
 
 
 def main():
-    game = NoughtsAndCrosses()
+    play = True
+    game_board = GameBoard()
+    while play:
+        game_board.play()
+        again = str(input("Do you want to play again, type y to continue, any other input to stop: "))
+        play = again == "y"
+        game_board.reset()
+    
+    print("Bye!")
 
-    print('Input a square from 1-9 to move.')
+class Cell():
+    def __init__(self, row: int, col: int) -> None:
+        self.state: Optional[Player] = None
+        self.row: int = row
+        self.col: int = col
 
-    while not game.finished():
-        try:
-            print(game.turn + ' to play: ', end='')
-            sys.stdout.flush()
-            action = sys.stdin.readline()
-            game.move(action)
-            game.display()
-        except KeyboardInterrupt:
-            return
-        except:
-            print('Invalid position')
-
-    game.display_result()
-
-
-class NoughtsAndCrosses:
+class GameBoard:
     def __init__(self):
-        self.turn = 'X'
-        self.position = [None, None, None, None, None, None, None, None, None]
+        self.turn = Player.X
+        self.turns: List[Cell] = []
+        self.position: List[Cell] = []
+        self.rows: List[List[Cell]] = [[], [], []]
+        self.cols: List[List[Cell]] = [[], [], []]
+        for row in range(3):
+            for col in range(3):
+                cell = Cell(row, col)
+                self.position.append(cell)
+                self.rows[row].append(cell)
+                self.cols[col].append(cell)
+
+    def play(self):
+        while not self.finished():
+            print('Input a square from 1-9 to move, x to undo')
+            try:
+                action = input(f"{self.turn.value} to play: ")
+                self.move(action)
+                self.display()
+            except KeyboardInterrupt:
+                return
+            except:
+                if action == "x":
+                    last_action = self.turns.pop()
+                    last_action.state = None
+                    self.display()
+                    self.turn = Player.X if self.turn == Player.O else Player.O
+                    continue
+                print('Invalid position')
+        self.display_result()
+
+    def reset(self):
+        self.turn = Player.X
+        for position in self.position:
+            position.state = None
+
+    def diag(self, diag: Diag) -> List[Cell]:
+        cols = list(range(3))
+        if diag == Diag.TOP_RIGHT_TO_BOT_LEFT:
+            cols.reverse()
+        return [row[col] for row, col in zip(self.rows, cols)]
 
     def move(self, action):
         position = int(action)
 
-        if self.position[position - 1]:
+        if self.position[position - 1].state:
             print('Square already occupied')
             return
 
-        self.position[position - 1] = self.turn
+        self.position[position - 1].state = self.turn
 
-        if self.turn == 'O':
-            self.turn = 'X' 
-        else:
-            self.turn = 'O'
+        self.turn = Player.X if self.turn == Player.O else Player.O
+        self.turns.append(self.position[position-1])
 
     def finished(self):
         if self.winner():
             return True
 
-        for square in self.position:
-            if not square:
-                return False
-        return True
+        return all(x.state for x in self.position)
 
-    def winner(self):
-        for player in ['X', 'O']:
-            # Rows
-            for i in range(3):
-                win = True
-                for j in range(3):
-                    if self.position[i*3+j] != player:
-                        win = False
-                        break
-                if win:
+    @staticmethod
+    def calculate_list_result(player: Player, list: List[Cell]) -> bool:
+        return  all(position.state == player for position in list)
+
+    def winner(self) -> Optional[Player]:
+        for player in list(Player):
+            win_tests = deepcopy(self.rows) # Rows
+            win_tests.extend(self.cols) # Cols
+            win_tests.extend([self.diag(diag) for diag in list(Diag)]) # Diags
+
+            for test in win_tests:
+                if self.calculate_list_result(player, test):
                     return player
-
-            # Columns
-            for i in range(3):
-                win = True
-                for j in range(3):
-                    if self.position[i+j*3] != player:
-                        win = False
-                        break
-                if win:
-                    return player
-
-            # Diagonals
-            if (self.position[0] == player 
-                    and self.position[4] == player 
-                    and self.position[8] == player):
-                return player
-            if (self.position[2] == player 
-                    and self.position[4] == player 
-                    and self.position[6] == player):
-                return player
 
         return None
 
     def display(self):
-        for i in range(3):
-            for j in range(3):
-                print(self.position[i*3 + j] or ' ', end='')
-                if j < 2:
-                    print('|', end='')
-            print()
+        for row in self.rows:
+            for cell in row:
+                print(f"{cell.state}|" if cell.state else ' |', end='\n' if cell.col == 2 else '')
 
     def display_result(self):
-        winner = self.winner()
-        if winner:
-            print(winner + ' wins!')
+        if winner:=self.winner():
+            print(f"{winner} wins!")
         else:
             print('Draw')
 
